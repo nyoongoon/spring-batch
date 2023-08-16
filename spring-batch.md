@@ -265,3 +265,169 @@ public class HelloWorldApplication {
 - -> RepeatStatus.CONTINUABLE 반환 가능 -> 태스크릿 다시 호출
 - 스텝 구성 후 이 스텝을 이용해 잡을 작성 가능. -> JobBuilderFactory 이용해서 잡 구성.
 - -> 잡 이름과 해당 잡에서 시작할 스텝을 구성.
+
+### 잡 실행하기 
+- 기본적으로 스프링 부트는 구성된 ApplicationContext내에서 찾은 모든 잡을 구동시에 실행함.
+#### 실행 시 내부 작동
+- 스프링 부트의 JobLauncherCommandLineRunner 
+- 이 컴포넌트는 스프링 배치가 클래스 경로에 있다면 실행 시 로딩됨
+- JobLauncher를 사용해 ApplicationContext에서 찾아낸 모든 잡을 실행.
+- -> 이후 잡은 첫번째 스텝을 실행
+- -> 이때 트랜잭션이 시작됨
+- -> Tasklet이 실행되고 결과과 JobRepository에 갱신
+
+# 예제 잡 애플리케이션 
+## 은행 거래명세서 예제
+- 매일밤 수행되는 배치처리는 거래 정보를 사용해 거래명세서를 생성
+- 기존 계좌에 거래내역을 적용한 후 각 계좌별로 거래명세서를 생성
+### 다양한 입출력 방식
+- 은행 거래명세서 잡은 일반적인 텍스트 파일인 플랫파일과 데이터베이스에서 입력을 받음
+- 또한 플랫 파일과 데이터베이스에 출력함
+- -> 다양한 Reader와 Writer를 사용
+### 오류 처리
+- 로깅, 레코드 건너뛰기, 로직 재시도 등
+### 확장성
+- 배치 처리 튜닝
+
+
+## 배치 잡 설계하기
+### 잡의 처리 흐름
+- 다음과 같은 4개의 스텝을 가진 잡 하나 만들기
+- 고객 데이터 가져오기 -> 거래정보 데이터 가져오기 -> 현재잔액 계산하기 -> 월별고객 거래명세서 생성하기
+
+#### 스텝1-고객 데이터 가져오기
+- 스프링 배치는 여러 레코드 형식을 처리할 수 있는 기능을 제공
+- 쓰기처리할 때 오류 최소화 하기위해 ItemProcessor 사용하여 유효성 검증
+- ItemWriter 구현체 사용해 레코드 유형에 따라 적절하게 데이터를 갱신
+
+#### 스텝2-거래 정보 데이터 가져오기 
+- 스프링 배치는 강력한 ItemReader 및 ItemWriter 구현체 제공하므로
+- -> 이 스텝에선 XML을 읽은 뒤 DB에 기록하는 구현체 사용
+
+#### 현재 잔액 계산하기
+- 계좌 테이블에 잔액 갱신
+- -> 드라이빙 쿼리 패턴으로 각 계좌 내 거래 레코드를 순서대로 가져와서
+- -> 해당 거래 레코드가 현재 잔액에 미치는 영향 계산
+- -> 후 계좌 테이블의 잔액을 갱신
+
+#### 월별 고객 거래명세서 생성
+- 이 스텝에서는 고객의 거래명세서를 포함하는 인쇄 파일을 계좌 하나씩 생성
+- 먼저 ItemReader를 사용해 DB에 고객 데이터를 읽어오기
+- ItemProcessor에게 해당 고객 데이터 보내기
+- 최종 아이템을 파일기반 ItemWriter에게 전달. 
+
+### 데이터 모델 이해하기
+- Customer: 고객별로 고객 이름 및 연락처 정보 비롯한 모든 고객정보
+- Account : 모든 고객 계좌 정보
+- CustomerAccount : 조인테이블 - 다대다 관계 해결
+- Transaction : 모든 거래정보 저장.
+
+# 잡과 스텝 이해하기
+## 잡 소개하기
+- 유일함 : 스프링 빈
+- 순서를 가진 여러 스텝의 목록임 : 스텝의 순서가 중요함
+- 처음부터 끝까지 실행 가능 : 외부 의존성 없이 실행될 수 있는 일련의 스텝.
+- -> ex) 파일이 수신되기를 세번째 스텝이 기다리도록 구성x, 대신 파일이 도착했을 떄 잡을 시작.
+- 독립적 : 의존성을 관리할 수 있어야함.
+- -> 잡의 실행은 스케줄러와 같은 것이 책임지지만
+- -> 잡은 자신이 처리하기로 정의된 모든 요소를 제어할 수 있음
+
+## 잡의 생명주기
+- 잡의 실행은 잡 러너(job runner)에서 시작됨
+- 잡 러너는 잡 이름과 여러 파라미터를 받아들여 잡을 실행시키는 역할을 함.
+### 잡러너 세가지
+- **CommandLineJobRunner** : 스크립트나 명령행에서 직접 잡을 실행할 때 사용-
+- -> 스프링을 부트스트랩하고 전달받은 파라미터를 사용해 요청된 잡을 실행
+- **JobRegistryBackgroundJobRunner** : 스프링을 부트스트랩해서 기동한 자바 프로세스 내에서
+- -> 쿼츠나 JMX후크 같은 스케줄러를 사용해 잡을 실행한다면,
+- -> 스프링이 부트스트랩될 때 실행 가능한 잡을 갖고 있는 JobRegistry를 생성함.
+- **JobLauncherCommandLineRunner** : 스프링 부트는 이것을 이용해 잡 시작
+- -> 별고의 구성이 없다면 ApplicationContext에 정의된 Job 타입의 모든 빈을 기동시에 실행함.
+### 잡러너 추가내용
+- 잡러너는 프레임워크가 제공하는 표준 모듈 아님
+- 각 시나리오마다 서로 다른 구현체 필요하므로 JobRunner 인터페이스 제공하지 않음
+- 실제 실행할 떄 진입점은 잡러너가 아닌 
+- -> org.springframework.batch.core.launch.JobLauncher 인터페이스의 구현체
+#### JobLauncher
+- 스프링 배치는 단일 JobLauncher만 제공
+- org.springframework.batch.core.launch.support.SimpleJobLauncher
+- CommandLineJobRunner와 JobLauncherCommandLineRunner 내부에 사용
+- -> JobLauncher는 요청된 잡을 실행할 때 코어의 스프링 TaskExecutor 인터페이스를 사용
+- -> SyncTaskExecutor 사용하면 JobLauncher와 동일 스레드에서 실행됨
+![img](/img/img.png)
+### 잡, 잡인스턴스, 잡익스큐션의 관계
+- 배치 잡이 실행되면 JobInstance가 생성됨
+- JobInstance는 잡의 논리적 실행을 나타내며, 두가지로 식별됨
+- 하나는 잡 이름
+- 하나는 잡에 전달되 실행 시에 사용되는 식별 파라미터.
+- 잡의 실행과 잡의 실행시도는 다른 개념
+#### Job, JobInstance 관계 예시
+- 매일 실행될 것으로 예상되는 잡이 있을 때
+- 잡 구성은 한 번만 됨
+- 매일 새로운 파라미터를 잡에게 전달해 실행함으로써 새로운 JobInstance 얻음
+- 각 JobInstance는 성공적으로 완료된 JobExecution이 있다면 완료된 것으로 간주됨. 
+- cf) JobInstance
+- JobInstance는 한 번 성공적으로 완료되면 다시 실행시킬 수 없음
+- -> JonInstance는 잡 이름과, 전달된 식별 파라미터로 식별되므로
+- -> 동일한 식별 파라미터 사용하는 잡은 한 번만 실행 가능
+#### JobInstance 상태 식별 방법
+- 스프링 배치가 JobInstance 상태 알아내는 방법
+- JobRepository가 사용하는 BATCH_JOB_INSTANCE 테이블
+- -> 나머지 테이블은 이 테이블을 기반으로 파생됨
+- -> JonInstance를 식별할 때는 
+- -> BATCH_JOB_INSTANCE와 BATCH_JOB_EXECUTION_PARAMS 테이블을 사용
+- BATCH_JOB_INSTANCE.JOB_KEY의 실체는 잡 이름과 식별 파라미터의 해시 값.
+
+#### JobExecution
+- JobExecution은 잡 실행의 실제 시도를 의미.
+- 잡이 처음부터 끝까지 단 번에 실행 완료 됐다면
+- -> 해당 JobInstance와 JobExecution은 단 하나씩 존재
+- -> 첫번째 잡 실행 후 오류 상태로 종료됐다면, 해당 JobInstance를 실행하려고 시도할 때마다 새로운 JobExecution이 생성됨 
+- -> 이때 JobInstance에는 동일한 식별 파라미터가 전달됨
+- 스프링 배치가 잡을 실행할 때 생성하는 각 JobExecution은 
+- -> BATCH_JOB_EXECUTION 테이블의 레코드로 저장됨
+- -> 또 JobExecution이 실행될 때 상태는 BATCH_JOB_EXECUTION_CONTEXT 테이블에 저장됨
+- -> 잡에서 오류가 발생하면 스프링 배치는 이 정보를 이용해 올바른 지점에서부터 다시 잡을 시작함.
+
+## 잡 구성하기
+### 잡의 기본 구성
+
+```java
+@EnableBatchProcessing //배치 잡 수행에 필요한 인프라스트럭처 제공
+@SpringBootApplication
+public class DemoApplication {
+    // 잡 빌더
+    @Autowired 
+    private JobBuilderFactory jobBuilderFactory; 
+
+    //스텝 빌더
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+
+    // 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("basicJob")
+                .start(step1())
+                .build();
+    }
+
+    //스텝 빈 정의 -> stepBuilderFactory->stepBuilder -> 스텝 정의
+    @Bean
+    public Step step1() {
+        return this.stepBuilderFactory.get("step1")
+                .tasklet(((contribution, chunkContext) -> {
+                    System.out.println("Hello, World");
+                    return RepeatStatus.FINISHED;
+                })).build();
+    }
+}
+```
+- @EnableBatchProcessing -> 배치 인프라스트럭처 제공
+- JobBuilderFactory, StepBuilderFactory -> 자동 와이어링
+- 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
+- 스텝 빈 정의 -> stepBuilderFactory->stepBuilder -> 스텝 정의
