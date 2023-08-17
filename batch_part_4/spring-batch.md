@@ -431,3 +431,39 @@ public class DemoApplication {
 - JobBuilderFactory, StepBuilderFactory -> 자동 와이어링
 - 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
 - 스텝 빈 정의 -> stepBuilderFactory->stepBuilder -> 스텝 정의
+
+# 잡 파라미터
+- JobInstance가 잡 이름 및 잡에 전달된 식별 파라미터로 식별됨
+- 동일한 식별 파라미터를 사용해 동일한 잡을 두 번 이상 실행할 수 없음
+- -> 다시 실행하면 JobInstanceAlreadyCompleteException을 전달받음
+
+## 잡에 파라미터 전달하는 방법
+- 스프링 배치는 잡에 파라미터를 전달할 수 있게 해줄 뿐만아니라,
+- 잡 실행 전에 파라미터를 자동으로 증가시키거나, 검증할 수도 있게 해줌.
+- 잡에 파라미터 전달 방법은 **사용자가 잡을 어떻게 호출하는지**에 따라 달라짐
+- **잡 러너**의 기능 중 하나가 잡 실행에 필요한 
+- -> **JobParameters객체를 생성**해 JobInstance에 전달하는 것.
+- -> 명령행에서 잡을 시작할 떄와, 쿼츠 스케줄러에서 잡을 시작할 때의 파라미터 전달 방식이 다르기 때문
+- JobLauncherCommandLineRunner를 기준으로 알아보기. 
+### JobLauncherCommandLineRunner로 파라미터 전달 방법
+```
+java -jar demo.jar name=Michael
+```
+- -> 위에서 name이라는 파라미터 하나 전달함
+- -> 사용자가 배치 잡에서 파라미터를 전달하면 **잡러너는 JobParameters 인스턴스를 생성**하는데,
+- 해당 인스턴스는 잡이 전달받는 모든 **파라미터 컨테이너의 역할**을 함.
+- cf) 스프링부트 명령행 기능 사용해 프로퍼티 구성과 다르므로, --으로 전달하면 안됨. 시스템 프로퍼티와도 다르므로 -D 아규먼트도 X
+
+### JobParameters
+- JobParameters는 java.util.Map<String, JobParameter> 객체의 래퍼에 불과함.
+- 스프링 배치는 파라미터의 타입 변환 기능을 제공. 변환된 타입에 맞게 JobParameter의 접근자를 제공
+- 타입변환기능 사용하라면 파라미터 이름 뒤에 괄호쓰고 그 안에 파라미터의 타입 명시(소문자)
+- -> 잡에 전달한 파라미터를 확인하고 싶다면 JobRepository를 살펴보면 됨.
+- -> JobRepository의 데이터베이스 스키마에는 BATCH_JOB_EXECUTION_PARAMS 테이블이 있음.
+
+### 식별되지 않는 파라미터
+- 식별에 사용되지 않는 파라미터도 있음
+- 특접 잡 파라미터가 식별에 사용되지 않게 하려면 접두사 "-"를 사용
+```
+java -jar demo.jar executionData(date)=2020/12/27 -name=Michael
+```
