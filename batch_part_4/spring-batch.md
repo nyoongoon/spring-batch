@@ -467,3 +467,84 @@ java -jar demo.jar name=Michael
 ```
 java -jar demo.jar executionData(date)=2020/12/27 -name=Michael
 ```
+- 위의 name은 식별에 사용되지 않는 파라미터이므로
+- -> 실패한 후, -name=John으로 변경하더라도 기존 JobInstance를 기반으로 JobExecution 생성
+
+
+#### 잡파라미터에 접근하기
+- 잡 파라미터에 접근하는 방법은 접근 위치에 따라 몇 가지 방식 있음
+```
+@Bean
+public Step step1() {
+    return this.stepBuilderFactory.get("step1")
+            .tasklet(((contribution, chunkContext) -> {
+                System.out.println("Hello, World");
+                return RepeatStatus.FINISHED;
+            })).build();
+}
+```
+##### ChunckContext
+- ChunckContext : HelloWorld 태스크릿을 보면 execute 메서드가
+- 두 개의 파라미터를 전달 받는 것을 볼 수 있다. 
+- 첫번째 파라미터인 StepContribution은 아직 커밋되지 않은 현재 **트랜잭션에 대한 정보**를 갖고 있음
+- 두번째 파라미터인 ChunkContext는 실행 시점의 **잡 상태**를 제공. 
+- 또한 태스크릿 내에서는 처리중인 **청크와 관련된 정보**도 갖고 있음
+- -> 해당 청크 정보는 스텝 및 잡과 관련된 정보도 갖고 있음. 
+- -> ChunkContext에는 JobParameters가 포함된 StepContext의 참조가 있음.
+```
+@Bean
+public Tasklet helloWorldTasklet(){
+    return (contribution, chunkContext)->{
+        String name = (String) chunkContext.getStepContext()
+                .getJobParameters() // JobParameters로 접근 !!!
+                .get("name");
+
+        System.out.println(String.format("Hello, %s!", name));
+        return RepeatStatus.FINISHED;
+    };
+}
+```
+- 스프링 배치는 JobParameter 클래스의 인스턴스에 잡 파라미터를 저장하는데, getJobParameters()를 호출하는 방식으로
+- -> 잡 파라미터를 가져오면 Map<String, Object>가 반환됨. -> 타입 캐스팅 필요
+
+###### 늦은 바인딩
+- 늦은 바인딩 : 스텝이나 잡을 제외한 프레임워크 내 특정 부분에 파라미터를 전달 하는 방법은
+- 스프링 구성을 사용해 주입.
+- -> Jobparameters는 변경할 수 없으므로 부트스트랩 시 바인딩 하는 것이 좋음
+```
+@StepScope //늦은 바인딩 허용
+@Bean
+public Tasklet helloWorldTasklet(
+        @Value("#{jobParameters['name']}") String name){
+    
+    return (contribution, chunkContext) -> {
+        System.out.println(String.format("Hello, %s!", name));
+        return RepeatStatus.FINISHED;
+    };
+}
+```
+- 위처럼 스텝 스코프나 잡 스코프를 사용하면 스텝이나 잡의 실행범위에 들어갈때까지 빈 생성응ㄹ 지연
+- -> 이렇게 함으로써 명령행 또는 다른소스에서 받아들인 잡 파라미터를 빈 생성시점에 주입.
+
+### 파라미터 특화기능
+#### 파라미터 유효성 검증
+- JobParametersValidator 인터페이스를 구현하여 잡 내에 구성하기
+```java
+public class ParameterValidator implements JobParametersValidator {
+    @Override
+    public void validate(JobParameters parameters) throws JobParametersInvalidException {
+        String fileName = parameters.getString("fileName");
+
+        if(!StringUtils.hasText(fileName)){
+            throw new JobParametersInvalidException("fileName parameter is missing");
+        } else if (!StringUtils.endsWithIgnoreCase(fileName, "csv")) {
+            throw new JobParametersInvalidException("fileName parameter does " +
+                    "not use the csv file extension");
+        }
+    }
+}
+```
+
+
+
+
