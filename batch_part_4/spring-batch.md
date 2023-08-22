@@ -527,7 +527,7 @@ public Tasklet helloWorldTasklet(
 - -> 이렇게 함으로써 명령행 또는 다른소스에서 받아들인 잡 파라미터를 빈 생성시점에 주입.
 
 ### 파라미터 특화기능
-#### 파라미터 유효성 검증
+### 잡 파라미터 유효성 검증
 - JobParametersValidator 인터페이스를 구현하여 잡 내에 구성하기
 ```java
 public class ParameterValidator implements JobParametersValidator {
@@ -544,7 +544,96 @@ public class ParameterValidator implements JobParametersValidator {
     }
 }
 ```
+- 반환타입이 void 이므로 JobParametersInvalidException이 발생하지 않는다면 
+- 유효성 검증이 통과했다고 판단
+- 위 처럼 직접 구현할 수도 있지만, 필수 파라미터 누락없이 전달됐는지 유효성 검증기인 
+- -> DefaultJobParametersValidator를 기본적으로 제공.
+- requiredKeys와 optionalKeys라는 선택적 의존성 있음
+
+```java
+import org.springframework.batch.core.job.DefaultJobParametersValidator;
+import org.springframework.context.annotation.Bean;
+
+class ex {
+    @Bean
+    public JobParametersValidator validator() {
+        DefaultJobParametersValidator validator = new DefaultJobParametersValidator();
+        
+        validator.setRequiredKeys(new String[] {"fileName"}); //필수 파라미터 목록
+        validator.setOptionalKeys(new String[] {"name"}); // 필수 아닌 파라미터 목록
+        return validator;
+    }
+}
+```
+- -> 위에서 fileName이 필수 파라미터로 구성되어 있으므로
+- -> fileName을 잡 파라미터로 전달하지 않고 잡을 실행하려고 하면 유효성 검증에 실패함
+- -> 위처럼 설정하면 이 잡에 전달할 수 있는 파라미터는 fileName, name
+- -> **이 외의 파라미터가 변수에 전달되면 유효성 검증에 실패(옵션키 없어도 통과)**.
+- -> 옵션 키가 구성되어 있지 않고, 필수키만 구성되어 있다면, 필수만 전달하고 그 외에 다른것을 전달해도 통과
+- -> (옵션키 있으면 설정된 파라미터들 외의 전달하면 실패)
+
+##### 유효성 검증기 적용하기
+- 두개의 유효성 검증기 사용하고 싶지만, 
+- JobBuilder의 메소드는 하나의 JobParameterValidator 인스턴스만 지정하게 돼 있음.
+- -> CompositeJobParametersValidator 사용.
+```java
+class ex {
+    @Bean
+    public CompositeJobParametersValidator validator() {
+        CompositeJobParametersValidator validator =
+                new CompositeJobParametersValidator();
 
 
+        DefaultJobParametersValidator defaultJobParametersValidator =
+                new DefaultJobParametersValidator(
+                        new String[]{"fileName"},
+                        new String[]{"name"});
+
+        defaultJobParametersValidator.afterPropertiesSet();
+
+        // 복합 검증 설정
+        validator.setValidators(
+                Arrays.asList(new ParameterValidator(),
+                        defaultJobParametersValidator));
+
+        return validator;
+    }
 
 
+    // 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("basicJob")
+                .start(step1())
+                .validator(validator())
+                .build();
+    }
+
+    //스텝 빈 정의 -> stepBuilderFactory->stepBuilder -> 스텝 정의
+    @Bean
+    public Step step1() {
+        return this.stepBuilderFactory.get("step1")
+                .tasklet(helloWorldTasklet(null, null)).build();
+    }
+
+    @StepScope
+    @Bean
+    public Tasklet helloWorldTasklet(
+            @Value("#{jobParameters['name']}") String name,
+            @Value("#{jobParameters['filaName']}") String fileName) {
+
+        return (contribution, chunkContext) -> {
+            System.out.println(String.format("Hello, %s!", name));
+            System.out.println(String.format("fileName, %s!", fileName));
+            return RepeatStatus.FINISHED;
+        };
+    }
+}
+```
+- -> filaName만 보내면 통과 !
+
+### 잡 파라미터 증가시키기
+- 위에선 주어진 식별 파라미터로 잡을 단 한 번만 실행하는 제약이 있었음.
+- -> JobParametersIncrementer 사용하여 잡을 여러번 실행 시키기
+- JobParametersIncrementer는 잡에서 사용할 파라미터를 고유하게 생성할 수 있도록 스프링 배치가 제공하는 인터페이스
+- 
