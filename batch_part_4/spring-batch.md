@@ -322,6 +322,7 @@ public class HelloWorldApplication {
 - CustomerAccount : 조인테이블 - 다대다 관계 해결
 - Transaction : 모든 거래정보 저장.
 
+
 # 잡과 스텝 이해하기
 ## 잡 소개하기
 - 유일함 : 스프링 빈
@@ -432,12 +433,12 @@ public class DemoApplication {
 - 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
 - 스텝 빈 정의 -> stepBuilderFactory->stepBuilder -> 스텝 정의
 
-# 잡 파라미터
+## 잡 파라미터
 - JobInstance가 잡 이름 및 잡에 전달된 식별 파라미터로 식별됨
 - 동일한 식별 파라미터를 사용해 동일한 잡을 두 번 이상 실행할 수 없음
 - -> 다시 실행하면 JobInstanceAlreadyCompleteException을 전달받음
 
-## 잡에 파라미터 전달하는 방법
+### 잡에 파라미터 전달하는 방법
 - 스프링 배치는 잡에 파라미터를 전달할 수 있게 해줄 뿐만아니라,
 - 잡 실행 전에 파라미터를 자동으로 증가시키거나, 검증할 수도 있게 해줌.
 - 잡에 파라미터 전달 방법은 **사용자가 잡을 어떻게 호출하는지**에 따라 달라짐
@@ -445,7 +446,7 @@ public class DemoApplication {
 - -> **JobParameters객체를 생성**해 JobInstance에 전달하는 것.
 - -> 명령행에서 잡을 시작할 떄와, 쿼츠 스케줄러에서 잡을 시작할 때의 파라미터 전달 방식이 다르기 때문
 - JobLauncherCommandLineRunner를 기준으로 알아보기. 
-### JobLauncherCommandLineRunner로 파라미터 전달 방법
+#### JobLauncherCommandLineRunner로 파라미터 전달 방법
 ```
 java -jar demo.jar name=Michael
 ```
@@ -454,14 +455,14 @@ java -jar demo.jar name=Michael
 - 해당 인스턴스는 잡이 전달받는 모든 **파라미터 컨테이너의 역할**을 함.
 - cf) 스프링부트 명령행 기능 사용해 프로퍼티 구성과 다르므로, --으로 전달하면 안됨. 시스템 프로퍼티와도 다르므로 -D 아규먼트도 X
 
-### JobParameters
+#### JobParameters
 - JobParameters는 java.util.Map<String, JobParameter> 객체의 래퍼에 불과함.
 - 스프링 배치는 파라미터의 타입 변환 기능을 제공. 변환된 타입에 맞게 JobParameter의 접근자를 제공
 - 타입변환기능 사용하라면 파라미터 이름 뒤에 괄호쓰고 그 안에 파라미터의 타입 명시(소문자)
 - -> 잡에 전달한 파라미터를 확인하고 싶다면 JobRepository를 살펴보면 됨.
 - -> JobRepository의 데이터베이스 스키마에는 BATCH_JOB_EXECUTION_PARAMS 테이블이 있음.
 
-### 식별되지 않는 파라미터
+#### 식별되지 않는 파라미터
 - 식별에 사용되지 않는 파라미터도 있음
 - 특접 잡 파라미터가 식별에 사용되지 않게 하려면 접두사 "-"를 사용
 ```
@@ -471,7 +472,7 @@ java -jar demo.jar executionData(date)=2020/12/27 -name=Michael
 - -> 실패한 후, -name=John으로 변경하더라도 기존 JobInstance를 기반으로 JobExecution 생성
 
 
-#### 잡파라미터에 접근하기
+##### 잡파라미터에 접근하기
 - 잡 파라미터에 접근하는 방법은 접근 위치에 따라 몇 가지 방식 있음
 ```
 @Bean
@@ -483,7 +484,7 @@ public Step step1() {
             })).build();
 }
 ```
-##### ChunckContext
+###### ChunckContext
 - ChunckContext : HelloWorld 태스크릿을 보면 execute 메서드가
 - 두 개의 파라미터를 전달 받는 것을 볼 수 있다. 
 - 첫번째 파라미터인 StepContribution은 아직 커밋되지 않은 현재 **트랜잭션에 대한 정보**를 갖고 있음
@@ -507,7 +508,7 @@ public Tasklet helloWorldTasklet(){
 - 스프링 배치는 JobParameter 클래스의 인스턴스에 잡 파라미터를 저장하는데, getJobParameters()를 호출하는 방식으로
 - -> 잡 파라미터를 가져오면 Map<String, Object>가 반환됨. -> 타입 캐스팅 필요
 
-###### 늦은 바인딩
+####### 늦은 바인딩
 - 늦은 바인딩 : 스텝이나 잡을 제외한 프레임워크 내 특정 부분에 파라미터를 전달 하는 방법은
 - 스프링 구성을 사용해 주입.
 - -> Jobparameters는 변경할 수 없으므로 부트스트랩 시 바인딩 하는 것이 좋음
@@ -526,8 +527,8 @@ public Tasklet helloWorldTasklet(
 - 위처럼 스텝 스코프나 잡 스코프를 사용하면 스텝이나 잡의 실행범위에 들어갈때까지 빈 생성응ㄹ 지연
 - -> 이렇게 함으로써 명령행 또는 다른소스에서 받아들인 잡 파라미터를 빈 생성시점에 주입.
 
-### 파라미터 특화기능
-### 잡 파라미터 유효성 검증
+#### 파라미터 특화기능
+#### 잡 파라미터 유효성 검증
 - JobParametersValidator 인터페이스를 구현하여 잡 내에 구성하기
 ```java
 public class ParameterValidator implements JobParametersValidator {
@@ -632,10 +633,214 @@ class ex {
 ```
 - -> filaName만 보내면 통과 !
 
-### 잡 파라미터 증가시키기
+#### 잡 파라미터 증가시키기
 - 위에선 주어진 식별 파라미터로 잡을 단 한 번만 실행하는 제약이 있었음.
 - -> JobParametersIncrementer 사용하여 잡을 여러번 실행 시키기
 - JobParametersIncrementer는 잡에서 사용할 파라미터를 고유하게 생성할 수 있도록 스프링 배치가 제공하는 인터페이스
 - -> 매 실행 시에 타임스탭프를 추가할 수도 있음
-- -> 스프링 배치는 이 인터페이스의 구현체 하나를 제공
+- -> 스프링 배치는 이 인터페이스의 구현체 하나를 제공 -> RunIdIncrementer
 - -> 기본적으로 파라미터 이름이 run.id인 long 타입 파라미터 값을 증가시킴
+- 잡에 JobParametersIncrementer 참조 추가 예시
+```java
+class ex{
+    @Bean
+    public CompositeJobParametersValidator validator() {
+        CompositeJobParametersValidator validator =
+                new CompositeJobParametersValidator();
+
+
+        DefaultJobParametersValidator defaultJobParametersValidator =
+                new DefaultJobParametersValidator(
+                        new String[]{"fileName"},
+                        new String[]{"name", "run.id"});
+
+        defaultJobParametersValidator.afterPropertiesSet();
+
+        // 복합 검증 설정
+        validator.setValidators(
+                Arrays.asList(new ParameterValidator(),
+                        defaultJobParametersValidator));
+
+        return validator;
+    }
+
+
+    // 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("basicJob")
+                .start(step1())
+                .validator(validator())
+                .incrementer(new RunIdIncrementer()) // 추가 구성
+                .build();
+    }
+}
+```
+- 예시 잡에 RunIdIncrementer를 적용하려면 잡 구성 작업 외의 추가 구성이 필요.
+- -> 추가 파라미터 또한 JobParametersValidator에 추가 구성 해야함
+- -> JobParametersIncrementer를 구성한 후에는 아래 처러럼 동일한 파라미터를 사용해 원하는 만큼 잡을 수행할 수 있음
+```
+java -jar target/Chapter04-0.0.1-SNAPSHOT.jar fileName=foo.csv name=Michael
+```
+- ex) 타임스탬프를 파라미터로 사용하기 위해 직접 구현
+```java
+public class DailyJobTimestamper implements JobParametersIncrementer {
+    @Override
+    public JobParameters getNext(JobParameters parameters){
+
+        return new JobParametersBuilder(parameters) // 빌더 사용!
+                .addDate("currentDate", new Date())
+                .toJobParameters();
+    }
+}
+```
+- 잡에 적용
+```java 
+class ex{
+    @Bean
+    public CompositeJobParametersValidator validator() {
+        CompositeJobParametersValidator validator =
+                new CompositeJobParametersValidator();
+
+
+        DefaultJobParametersValidator defaultJobParametersValidator =
+                new DefaultJobParametersValidator(
+                        new String[]{"fileName"},
+                        new String[]{"name", "currentDate"});
+
+        defaultJobParametersValidator.afterPropertiesSet();
+
+        // 복합 검증 설정
+        validator.setValidators(
+                Arrays.asList(new ParameterValidator(),
+                        defaultJobParametersValidator));
+
+        return validator;
+    }
+
+
+    // 잡 빈 정의->jobBuilderFactory->jobBuilder->잡구성
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("basicJob")
+                .start(step1())
+                .validator(validator())
+                .incrementer(new DailyJobTimestamper())
+                .build();
+    }
+} 
+```
+#### 잡 파라미터 정리
+- 잡 파라미터는 런타임 시 잡에 특정한 값을 지정할 수 있게 해줌
+- 또한, 잡 실행을 고유하게 식별하는 데 사용됨.
+- 잡 실행 날짜 구성 및 오류 파일 재처리 같은 목적으로 자주 사용
+
+
+## 잡 리스너 적용하기
+- 모든 잡은 생명주기를 갖음 -> 생명주기 여러 시점에 로직 추가 가능
+- -> 잡 실행과 관련이 있다면 JobExecutionListener 인터페이스를 사용
+- -> beforeJob과 afterJob의 두 메서드를 제공
+- -> 이 두 콜백 메서드는 잡 생명주기에서 가장 먼저 실행되거나 나중에 실행됨
+- 사용 사례 : 알림, 초기화, 정리
+- cf) 잡 리스터 주의점
+- -> **afterJob()** 메서드는 잡의 완료 상태에 관계없이 종료가 되면 호출됨.
+- -> beforeJob()은 잡 내의 처리를 시작하기 전에 호출됨.
+- -cf) 리스너는 잡 뿐만아니라, 스텝, 리더, 라이터 등의 컴포넌트에도 사용가능. 
+
+### 잡 리스너 작성하는 두가지 방법
+1. JobExecutionListener 인터페이스 구현
+2. @BeforeJob, @AfterJob 애너테이션 작성
+
+
+#### JobExecutionListener 인터페이스 구현
+```java
+public class JobLoggerListener implements JobExecutionListener {
+    private static String START_MESSAGE = "%s is beginning execution";
+    private static String END_MESSAGE = "%s has completed with the status %s";
+
+    @Override
+    public void beforeJob(JobExecution jobExecution) {
+        System.out.println(String.format(START_MESSAGE,
+                jobExecution.getJobInstance().getJobName()));
+    }
+
+    @Override
+    public void afterJob(JobExecution jobExecution) {
+        System.out.println(String.format(END_MESSAGE,
+                jobExecution.getJobInstance().getJobName(),
+                jobExecution.getStatus()));
+    }
+}
+```
+- 잡에 JobLoggerListener 추가하기
+```java
+class ex{
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("basicJob")
+                .start(step1())
+                .validator(validator())
+                .incrementer(new DailyJobTimestamper())
+                .listener(new JobLoggerListener())
+                .build();
+    }
+}
+```
+#### @BeforeJob, @AfterJob 사용
+- JobExecutionListener 인터페이스 구현 X, 애너테이션 부착O
+- 잡 구성 방법이 달라짐 -> 이 리스너를 잡에 주입하려면 래핑을 해야함.
+- -> JobListenerFactoryBean을 사용.
+```java
+public class JobLoggerListener {
+    private static String START_MESSAGE = "%s is beginning execution";
+    private static String END_MESSAGE = "%s has completed with the status %s";
+
+    @BeforeJob
+    public void beforeJob(JobExecution jobExecution) {
+        System.out.println(String.format(START_MESSAGE,
+                jobExecution.getJobInstance().getJobName()));
+    }
+
+    @AfterJob
+    public void afterJob(JobExecution jobExecution) {
+        System.out.println(String.format(END_MESSAGE,
+                jobExecution.getJobInstance().getJobName(),
+                jobExecution.getStatus()));
+    }
+}
+```
+- 애노테이션 사용한 리스너 잡에 구성하기 
+- -> JobListenerFactoryBean 사용하여 리스너를 래핑하기
+```java
+class ex{
+    @Bean
+    public Job job() {
+        return this.jobBuilderFactory.get("basicJob")
+                .start(step1())
+                .validator(validator())
+                .incrementer(new DailyJobTimestamper())
+                .listener(JobListenerFactoryBean.getListener( // 팩토리 클래스로 래핑
+                        new JobLoggerListener()))
+                .build();
+    }
+}
+```
+
+## ExecutionContext
+- 배치처리는 특성상 상태를 가지고 있음.
+- 위에서 JobExecution이 어떻게 실제 잡 실행 시도를 나타내는지 보았음
+- -> JobExecution은 상태를 저장하는 여러 곳 중에 한 곳임
+- -> JobExecutino은 잡이나 스텝이 진행될 때 변경됨
+- -> JobExecution은 ExecutionContext에 저장됨
+- 웹앱이 일반적으로 HttpSession을 사용해 상태를 저장하듯이
+- -> 배치에서 ExecutionContext는 배치 잡의 세션으로 볼 수 있다.
+- ExecutionContext는 키-쌍 보관 도구이지만, 잡의 상태를 안전하게 보관하는 방법을 제공함
+- -> 웹앱의 세션과 ExecutionContext의 차이점은
+- -> 잡을 다루는 과정에서 실제로 여러개의 ExecutionContext가 존재할 수 있다는 것
+- -> JobExecution처럼 각 StepExecution도 마찬가지로 ExecutionContext를 가짐
+- -> 적절한 수준(개별 스텝용 데이터 또는 잡 전체용 글로벌 데이터)로 데이터 사용 범위를 지정할 수 있음
+
+
+
+
+
