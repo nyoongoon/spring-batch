@@ -831,14 +831,97 @@ class ex{
 - 위에서 JobExecution이 어떻게 실제 잡 실행 시도를 나타내는지 보았음
 - -> JobExecution은 상태를 저장하는 여러 곳 중에 한 곳임
 - -> JobExecutino은 잡이나 스텝이 진행될 때 변경됨
-- -> JobExecution은 ExecutionContext에 저장됨
+- -> JobExecution은 **ExecutionContext**에 저장됨
 - 웹앱이 일반적으로 HttpSession을 사용해 상태를 저장하듯이
-- -> 배치에서 ExecutionContext는 배치 잡의 세션으로 볼 수 있다.
+- -> 배치에서 **ExecutionContext는 배치 잡의 세션**으로 볼 수 있다.
 - ExecutionContext는 키-쌍 보관 도구이지만, 잡의 상태를 안전하게 보관하는 방법을 제공함
 - -> 웹앱의 세션과 ExecutionContext의 차이점은
 - -> 잡을 다루는 과정에서 실제로 여러개의 ExecutionContext가 존재할 수 있다는 것
 - -> JobExecution처럼 각 StepExecution도 마찬가지로 ExecutionContext를 가짐
 - -> 적절한 수준(개별 스텝용 데이터 또는 잡 전체용 글로벌 데이터)로 데이터 사용 범위를 지정할 수 있음
+- ExecutionContext가 담고 있는 모든 것은 **JobRepository에 저장**되므로 안전함
+
+### ExecutionContext 조작하기 - 3가지
+#### 기본 조작 - JobExecution 또는 StepExecution에서 가져오기
+- ExecutionContext는 JobExecution 또는 StepExecution의 일부분
+- -> 따라서 JobExecution 또는 StepExecution에서 가져와야함
+```java
+public class HelloWorld implements Tasklet {
+    private static final String HELLO_WORLD = "Hello, %s";
+
+    @Override
+    public RepeatStatus execute(StepContribution step,
+                                ChunkContext context) throws Exception {
+        String name = (String) context.getStepContext()
+                .getJobParameters()
+                .get("name");
+        
+        ExecutionContext jobContext = context.getStepContext()
+                .getStepExecution()
+                .getJobExecution()
+                .getExecutionContext();
+        jobContext.put("user.name", name);
+
+        System.out.println(String.format(HELLO_WORLD, name));
+        
+        return RepeatStatus.FINISHED;
+    }
+}
+```
+- -> 잡의 ExecutionContext를 얻어오려면 약간의 순회가 필요함.
+- -> 청크에서 스텝으로 넘어간 후, 잡으로 넘어가는 것처럼 세 개의 스코프를 넘나드는 일이 필요.
+- StepContext.getJobExecutionContext()가 반환한 Map<String, Object>을 변경하더라도 실제 
+- -> ExecutionContext의 내용이 바뀌지 않음. 
+```
+  ExecutionContext jobContext = context.getStepContext()
+        .getStepExecution()
+        .getJobExecution() // JobExcution에서 가져오기 !
+        .getExecutionContext();
+        
+  ExecutionContext jobContext = context.getStepContext()
+        .getStepExecution() // StepExcution에서 가져오기 !
+        .getExecutionContext();
+```
+
+#### 승격 매커니즘으로 ExecutionContext 조작
+- 스텝 간에 공유할 데이터가 있지만, 첫번째 스텝이 성공했을 때만 공유하게 하고싶을 떄 유용
+- -> 아래는 ExecutionContextPromotionListener 리스너가 배치잡에 구성되고,
+- -> name키가 스텝의 ExecutionContext에 있다고 가정했을 때 name 키를 승격시키는 방법
+
+```java
+class ex {
+    @Bean
+    public Step step1(){
+        this.stepBuilderFactory.get("step1")
+                .tasklet(new HelloTasklet())
+                .listener(promotionListener())
+                .build();
+    }
+    @Bean
+    public StepExecutionListener promotionListener(){
+        ExecutionListener listener = new
+                ExecutionContextPromotionListener();
+        listener.setKeys(new String[] {"name"});
+        return listener;
+    }
+}
+```
+- 위의 promotionListener는 스텝이 성공적으로 완료 상태로 종료된 이후
+- -> 스텝의 ExecutionContext에서 "name"키를 잡으면 잡의 ExecutionContext에 복사한다.
+- -> "name"키를 찾지 못할 때 예외 발생하게 구성할 수도 있음.
+
+#### ItemStream 인터페이스를 사용하여 ExecutionContext 접근
+- ExecutionContext 접근하는 마지막 방법
+
+
+### ExecutionContext 저장하기
+- 잡이 처리되는 동안 스프링 배치는 각 **청크를 커밋**하면서 **잡이나 스텝의 상태를 저장**함
+- -> 구체적으로는 **잡과 스텝의 현재 ExecutionContext를 DB에 저장**하는 것.
+- -> 
+
+
+
+
 
 
 
